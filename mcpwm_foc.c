@@ -126,8 +126,10 @@ static void svm(float alpha, float beta, uint32_t PWMHalfPeriod,
 		uint32_t* tAout, uint32_t* tBout, uint32_t* tCout, uint32_t *svm_sector);
 static void run_pid_control_pos(float angle_now, float angle_set, float dt);
 static void run_pid_control_speed(float dt);
+static void full_brake_hw(void);
 static void stop_pwm_hw(void);
 static void start_pwm_hw(void);
+
 static int read_hall(void);
 static float correct_encoder(float obs_angle, float enc_angle, float speed);
 static float correct_hall(float angle, float speed, float dt);
@@ -1206,6 +1208,29 @@ float mcpwm_foc_measure_resistance(float current, int samples) {
 	mc_interface_unlock();
 
 	return (voltage_avg / current_avg) * (2.0 / 3.0);
+}
+
+float mcpwm_foc_test_brake(void) {
+	mc_interface_lock();
+	// Disable timeout
+	systime_t tout = timeout_get_timeout_msec();
+	float tout_c = timeout_get_brake_current();
+	timeout_reset();
+	timeout_configure(60000, 0.0);
+
+	// Wait for the current to rise and the motor to lock.
+	chThdSleepMilliseconds(500);
+
+	full_brake_hw();
+
+	chThdSleepMilliseconds(2000);
+
+
+	// Enable timeout
+	timeout_configure(tout, tout_c);
+
+	mc_interface_unlock();
+	return 0.0;
 }
 
 /**
@@ -2517,6 +2542,29 @@ static void run_pid_control_speed(float dt) {
 	}
 
 	m_iq_set = output * m_conf->lo_current_max;
+}
+
+static void full_brake_hw(void) {
+#ifdef HW_HAS_DRV8313
+	ENABLE_BR();
+#endif
+
+	TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_ForcedAction_InActive);
+	TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+	TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+
+	TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_ForcedAction_InActive);
+	TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
+	TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Enable);
+
+	TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_ForcedAction_InActive);
+	TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+	TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+
+	TIM_GenerateEvent(TIM1, TIM_EventSource_COM);
+
+	m_output_on = false;
+	// set_switching_frequency(conf->m_bldc_f_sw_max);
 }
 
 static void stop_pwm_hw(void) {
