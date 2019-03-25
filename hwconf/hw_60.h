@@ -26,7 +26,7 @@
 #define HW_HAS_DRV8301
 #define HW_HAS_3_SHUNTS
 #define HW_HAS_PERMANENT_NRF
-#define HW_HAS_PHASE_SHUNTS
+// #define HW_HAS_PHASE_SHUNTS
 
 // Macros
 #ifdef HW60_VEDDER_FIRST_PCB
